@@ -1,0 +1,906 @@
+---
+title: "Climate and Financial Analysis on Olympic Games Feasibility"
+author: "Theodore Wang"
+date: "4/19/2020"
+output:
+  pdf_document:
+    toc: yes
+  html_document:
+    code_folding: show
+    number_sections: yes
+    toc: yes
+    toc_float:
+      collapsed: yes
+      smooth_scroll: yes
+---
+
+# Introduction
+
+Ever since its inception in Ancient Greece and its revival at the dawn of the 20th century, the Olypmic Games have attracted millions of people to witness the miracle of human sport and athleticism. Every two years, thousands of atheletes from around the world travel to one central hub to participate in the Olympic Games, seen by many as the ultimate measure of prestige and test of skill and talent. Every Olympic Games alternates between winter and summer, each with their own unique events and special body of atheletes who come to compete with the best across the globe. 
+
+Accordingly, there is a process by which cities from various countries can place their bids to host the next Olympic Games. In recent years, however, and especially compared to its origins more than a century ago, the Olympic Games and their host cities face ever more arduous challenges. Cities have spent anywhere from millions to billions of dollars organizing, planning, and hosting the games; there are many cases where hosting the games eventually financially ruined the city. Financial costs, infrastructure, and climate conditions threaten the future of the games and the feasibility of certain locations in hosting them. How do changing temperatures affect the ability of cities in hosting the Olympics? Which locations should be avoided or sought after in hosting either the summer or winter Olympics? Can we visualize a history of spending by each country on hosting the Olympic Games? 
+
+Using R to conduct a temperature anomaly analysis and geospatial study using historical temperature data, as well as a brief statistical financial analysis, this report analyzes the history of previous Olympic Games venues and the feasibility of future locations for future games.
+
+# Data Preparation
+
+## Installing Packages
+```{r installPackages, message=FALSE, warning=FALSE}
+# This command ensures that packages not installed are installed
+packageList <- c("raster","tiff", "readr", "sf", "ggplot2", "rworldmap", "dplyr", "plotly", "tmap", "tidyr")
+for(p in packageList){
+  if (!requireNamespace(p)) {
+    install.packages(p)
+  }
+}
+```
+
+## Loading Packages
+```{r loadPackages, message=FALSE, warning=FALSE}
+# Load all the packages installed for use
+library(tiff)
+library(raster)
+library(readr)
+library(sf)
+library(ggplot2)
+library(rworldmap)
+library(dplyr)
+library(plotly)
+library(tmap)
+library(tidyr)
+```
+
+## Read in Data
+
+### Average Yearly Air Temperature Data (1900-2017)
+
+The following data sets are recorded monthly mean air temperatures from the years 1900 to 2017 interpolated to a 0.5 by 0.5 degree grid resolution; data is provided by the Global (Land) Precipitation and Temperature initiative by the National Center for Atmospheric Research by Willmott and Matsuura at the University of Delaware. 
+
+Note that there are a few years where schedule Olympic Games were cancelled, such as between 1912 and 1920 due to World War I and between 1936 and 1948 due to World War II. Additionally, up until 1994, Winter and Summer Olympic Games were held in the same year. It is only with the 17th Winter Olympiad in Lillehammer, Norway that Winter Olympics began to run along a different scheduling.
+
+I have specifically selected only the years where Olympic Games have been held and further filtered the data to skip every twelve years. That is, only the Olympic Games that occur twelve years from the previous have been included (meaning 1900, 1912, 1924, 1936, etc.). The exceptions to this are some prominent years which I believe are too important to leave out (such as the first Olympic Games with temperature data in 1900 and the first time the Winter Olympic Games split from the old scheduling pattern) and the Olympic Games within the recent two decades. This is to help reduce the number of map analyses while still following a consistent basis on passage of time.
+```{r readYear, message=FALSE, warning=FALSE}
+# Check if data set is already donwloaded; if not, download from source
+if(!file.exists("./data/air_temp_2017.tar.gz")){
+  print("Fetching air temperature data from source.")
+download.file(url = "http://climate.geog.udel.edu/~climate/html_pages/Global2017/air_temp_2017.tar.gz", destfile = "./data/air_temp_2017.tar.gz")}
+untar("./data/air_temp_2017.tar.gz", list=TRUE)
+untar("./data/air_temp_2017.tar.gz", exdir = "./data")
+
+# Read in yearly air temperature data and assign months as column names
+# 1900
+year1900 <- read.table("./data/air_temp.1900", header=FALSE)
+colnames(year1900) <- c("lon", "lat", "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec", "annualMean")
+
+# 1912
+year1912 <- read.table("./data/air_temp.1912", header=FALSE)
+colnames(year1912) <- c("lon", "lat", "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec", "annualMean")
+
+# 1924
+year1924 <- read.table("./data/air_temp.1924", header=FALSE)
+colnames(year1924) <- c("lon", "lat", "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec", "annualMean")
+
+# 1936
+year1936 <- read.table("./data/air_temp.1936", header=FALSE)
+colnames(year1936) <- c("lon", "lat", "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec", "annualMean")
+
+# 1948
+year1948 <- read.table("./data/air_temp.1948", header=FALSE)
+colnames(year1948) <- c("lon", "lat", "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec", "annualMean")
+
+# 1960
+year1960 <- read.table("./data/air_temp.1960", header=FALSE)
+colnames(year1960) <- c("lon", "lat", "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec", "annualMean")
+
+# 1972
+year1972 <- read.table("./data/air_temp.1972", header=FALSE)
+colnames(year1972) <- c("lon", "lat", "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec", "annualMean")
+
+# 1984
+year1984 <- read.table("./data/air_temp.1984", header=FALSE)
+colnames(year1984) <- c("lon", "lat", "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec", "annualMean")
+
+# 1994
+year1994 <- read.table("./data/air_temp.1994", header=FALSE)
+colnames(year1994) <- c("lon", "lat", "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec", "annualMean")
+
+# 1996
+year1996 <- read.table("./data/air_temp.1996", header=FALSE)
+colnames(year1996) <- c("lon", "lat", "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec", "annualMean")
+
+# 2000
+year2000 <- read.table("./data/air_temp.2000", header=FALSE)
+colnames(year2000) <- c("lon", "lat", "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec", "annualMean")
+
+# 2002
+year2002 <- read.table("./data/air_temp.2002", header=FALSE)
+colnames(year2002) <- c("lon", "lat", "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec", "annualMean")
+
+# 2004
+year2004 <- read.table("./data/air_temp.2004", header=FALSE)
+colnames(year2004) <- c("lon", "lat", "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec", "annualMean")
+
+# 2006
+year2006 <- read.table("./data/air_temp.2006", header=FALSE)
+colnames(year2006) <- c("lon", "lat", "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec", "annualMean")
+
+# 2008
+year2008 <- read.table("./data/air_temp.2008", header=FALSE)
+colnames(year2008) <- c("lon", "lat", "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec", "annualMean")
+
+# 2010
+year2010 <- read.table("./data/air_temp.2010", header=FALSE)
+colnames(year2010) <- c("lon", "lat", "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec", "annualMean")
+
+# 2012
+year2012 <- read.table("./data/air_temp.2012", header=FALSE)
+colnames(year2012) <- c("lon", "lat", "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec", "annualMean")
+
+# 2014
+year2014 <- read.table("./data/air_temp.2014", header=FALSE)
+colnames(year2014) <- c("lon", "lat", "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec", "annualMean")
+
+# 2016
+year2016 <- read.table("./data/air_temp.2016", header=FALSE)
+colnames(year2016) <- c("lon", "lat", "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec", "annualMean")
+```
+Citation: Willmott, C. J. and K. Matsuura (2001) Terrestrial Air Temperature: 1900-2017 Gridded Monthly Time Series (1900 - 2017), http://climate.geog.udel.edu/~climate/html_pages/Global2017/README.GlobalTsT2017.html.
+
+### Average and Maximum Air Temperature during Summer and Winter (1970-2000)
+
+This is historical climate data provided by WorldClim v2, showing the average and maximum temperatures around the globe based on a 10 minute (~340 square kilometer) scale. Each .zip file contains 12 .tif files, each representing a month of the year (01 is January, 02 is February, etc.).
+``` {r readTif}
+# Check if data set is already donwloaded; if not, download from source
+if(!file.exists("./data/wc2.1_10m_tavg")){
+  print("Fetching data from source.")
+download.file(url = "http://biogeo.ucdavis.edu/data/worldclim/v2.1/base/wc2.1_10m_tavg.zip", destfile = "./data/wc2.1_10m_tavg.zip")}
+unzip("./data/wc2.1_10m_tavg.zip", exdir = "./data")
+
+# Assign names to individual month data
+avgTempJul <- './data/wc2.1_10m_tavg_07.tif'
+avgTempFeb <- './data/wc2.1_10m_tavg_02.tif'
+
+# Read data into a raster format
+avgTempJuly <- raster(avgTempJul)
+avgTempFebruary <- raster(avgTempFeb)
+```
+
+```{r readTifTwo}
+# Repeat for max temperature data set
+if(!file.exists("./data/wc2.1_10m_tmax")){
+  print("Fetching data from source.")
+download.file(url = "http://biogeo.ucdavis.edu/data/worldclim/v2.1/base/wc2.1_10m_tmax.zip", destfile = "./data/wc2.1_10m_tmax.zip")}
+unzip("./data/wc2.1_10m_tmax.zip", exdir = "./data")
+
+# Assign names to individual month data
+maxTempJul <- './data/wc2.1_10m_tmax_07.tif'
+maxTempFeb <- './data/wc2.1_10m_tmax_02.tif'
+
+# Read data into a raster format
+maxTempJuly <- raster(maxTempJul)
+maxTempFebruary <- raster(maxTempFeb)
+```
+Citation: Fick, S.E. and R.J. Hijmans, 2017. WorldClim 2: new 1km spatial resolution climate surfaces for global land areas. International Journal of Climatology 37 (12): 4302-4315.
+
+### Temperature Anomalies Data (May-July 1880-2019)
+
+This data set is provided by the National Centers for Environmental Information as part of the National Oceanic and Atmospheric Administration (NOAA). This particular climate data set is a global time series query specifying a timescale of 1 month (July, when most summer Olympic Games start), starting in 1880 to 2020 (last recorded year is 2019). The resulting data set offers the year of record and the value of the temperature anomaly recorded.
+```{r readCSVJuly}
+# Check if data set is already donwloaded; if not, download from source
+if(!file.exists("./data/landSummerData.csv")){
+  print("Fetching data from source.")
+download.file(url = "https://www.ncdc.noaa.gov/cag/global/time-series/globe/land/1/7/1880-2020/data.csv", destfile = "./data/landSummerData.csv")}
+
+# Clean data and rename columns
+anomalyJuly <- read.csv("./data/landSummerData.csv", header=TRUE)
+cleanAnomalyJuly <- anomalyJuly[-c(1:4),]
+colnames(cleanAnomalyJuly) <- c("Year", "Difference")
+cleanAnomalyJuly$Difference <- as.numeric(as.character(cleanAnomalyJuly$Difference))
+cleanAnomalyJuly$Year <- as.numeric(as.character(cleanAnomalyJuly$Year))
+```
+
+This data set comes from the same source, but is the result of a query specifying the month as February, when most winter Olympic Games start.
+
+```{r readCSVFeb}
+# Check if data set is already donwloaded; if not, download from source
+if(!file.exists("./data/landWinterData.csv")){
+  print("Fetching data from source.")
+download.file(url = "https://www.ncdc.noaa.gov/cag/global/time-series/globe/land/1/2/1880-2020/data.csv", destfile = "./data/landWinterData.csv")}
+
+# Clean data and rename columns
+anomalyFeb <- read.csv("./data/landWinterData.csv", header=TRUE)
+cleanAnomalyFeb <- anomalyFeb[-c(1:4),]
+colnames(cleanAnomalyFeb) <- c("Year", "Difference")
+cleanAnomalyFeb$Difference <- as.numeric(as.character(cleanAnomalyFeb$Difference))
+cleanAnomalyFeb$Year <- as.numeric(as.character(cleanAnomalyFeb$Year))
+```
+Citation: NOAA National Centers for Environmental information, Climate at a Glance: Global Time Series, published April 2020, retrieved on April 13, 2020 from https://www.ncdc.noaa.gov/cag/
+
+### Financial Outturn Data (1960-2016)
+
+This data set was taken from data.world; it contains the financial costs of each Olympic Games from 1960 to 2016 in billions of dollars, as well as the location, season (summer or winter), and number of atheletes that attended. These data figures are from one source and may differ from other reported data.
+```{r readDataWorld}
+# Check if data set is already downloaded; if not, download from source
+if(!file.exists("./data/gameCost.csv")){
+  print("Fetching data from source.")
+download.file(url = "https://query.data.world/s/c64ruj3biyf5wpefrp7e724fd7o35e", destfile = "./data/gameCost.csv")}
+
+# Read in the data as a .csv file
+cost <- read.csv("./data/gameCost.csv", header=TRUE)
+
+# Rename columns in the data set
+colnames(cost) <- c("City", "Year", "Country", "Season", "Events", "Atheletes", "Cost")
+
+# Change some of the data types to a usable format
+cost$Cost <- as.numeric(as.character(cost$Cost))
+cost <- drop_na(cost)   # Drop any NA's to clean up the data
+```
+
+### Country Shapefile Data
+
+This country shapefile provides the necessary geospatial data, projected as a WGS84 reference system, needed to add location to the financial data above.
+```{r readShapefile}
+if(!file.exists("./data/Longitude_Graticules_and_World_Countries_Boundaries-shp")){
+  print("Fetching data from source.")
+download.file(url = "https://opendata.arcgis.com/datasets/a21fdb46d23e4ef896f31475217cbb08_1.zip", destfile = "./data/Longitude_Graticules_and_World_Countries_Boundaries-shp.zip")}
+unzip("./data/Longitude_Graticules_and_World_Countries_Boundaries-shp.zip", exdir = "./data")
+
+# Read in shapefile
+country <- st_read("./data/99bfd9e7-bb42-4728-87b5-07f8c8ac631c2020328-1-1vef4ev.lu5nk.shp")
+
+# Join shapefile with financial outturn data
+countryCost <- merge(country, cost, by.x="CNTRY_NAME", by.y="Country")
+
+# Order the data set by year of occurrence
+countryCost <- countryCost[order(countryCost$Year),]
+
+# Create individual subsets of data according to their season of occurrence
+countryCostSummer <- filter(countryCost, Season == "Summer")
+countryCostWinter <- filter(countryCost, Season == "Winter")
+```
+
+
+# Data Analysis
+
+I have specifically chosen the months July and February as they are the most common starting months for the summer and winter Olympic Games throughout history, respectively. Recent summer Olympics have started in August, but the majority of previous summer Olympics, as well as future ones (the Tokyo 2021, Paris 2024, and Los Angeles 2028 summer Olympics are all due to start in July). As a result, many of the following analyses focus on those aforementioned months for results.
+
+## Temperature Anomaly Plots
+
+This anomaly plot visualizes the data from July temperature anomalies. Each bar representing a different year records the difference in temperature between that year's average and the 20th century overall average temperature. In 1931, for instance, the temperature difference measures 0.17 degrees Celsius. This means that the average global temperature for the July of 1931 was 0.17 degrees Celsius warmer than the average global temperature in July for the entire 20th century.
+
+We can see that the time period from 1880 to approximately 1930 shows the global average temperature in the month of July to be cooler than the 20th century global average in July. Between 1930 and the 1960s we see a trend of both cooler and warmer differences by around 0.20 to 0.30 degrees Celsius. It is evident that from that point onwards, the global average temperature starts increasing dramatically to the point where the aerage temperature in July consistently measures at last 1.0 degree Celsius above the 20th century global average. This measure of temperature anomalies suggests that global temperatures during July, and extrapolating to the other summer months as well, has been rising over the past century.
+```{r plotAnomalyJuly}
+# Name and plot the plot; give it a title and label the axes as well
+anomalyPlotJuly <- ggplot(cleanAnomalyJuly, aes(x = Year, y = Difference, color = Difference)) + geom_col() + geom_hline(yintercept = 0, linetype = "dashed", color = "red") + ggtitle("Plot of Temperature Difference Anomalies in July (1880-2019)") + ylab("Difference (degrees Celsius)")
+
+# Make the plot interactive so that the reader can hover over individual data points
+ggplotly(anomalyPlotJuly, tooltip=c("Year", "Difference"))
+```
+
+This anomaly plot plots the data from February temperature anomalies. Much like the previous anomaly plot, this graph showcases the difference in the average temperature for the month of February from 1880 to 2020.
+
+Simlarly to the July plot, this graph shows a period from 1880 to around 1935 where the global average temperature in February measured below the century global average. Furthemore, there is also a period of time from the 1960s onward where the global average temperature warms up dramatically. One thing to note is the scale by which the temperatures are measured here. While the dramatic rise in temperature in the previous July plot measures just over 1.0 degrees Celsius, there are several years here that measure more than 1.5 degrees Celsius, and even two years (2016 and 2020) where the average global temperature during the month of February measured at least 2.0 degrees higher than the century average. 
+```{r plotAnomalyFeb}
+# Name and plot the plot; give it a title and label the axes as well
+anomalyPlotFeb <- ggplot(cleanAnomalyFeb, aes(x = Year, y = Difference, color = Difference)) + geom_col() + geom_hline(yintercept = 0, linetype = "dashed", color = "red") + ggtitle("Plot of Temperature Difference Anomalies in February (1880-2020)") + ylab("Difference (degrees Celsius)")
+
+# Make the plot interactive so that the reader can hover over individual data points
+ggplotly(anomalyPlotFeb, tooltip=c("Year", "Difference"))
+```
+While both plots show a consistent increase in recorded average temperature, the February plot suggests that perhaps winter months, such as December, January, and February, are warming to a greater degree or at a faster rate than summer months such as June and July. 
+
+
+## Summer and Winter Average and Maximum Temperature Plots (1970-2000)
+
+### Average Recorded July Air Temperature
+
+Data plotted from the .tif files show the measured average and maximum recorded air temperatures above land from areas around the globe. These map plots can give a good overview of the zones in which certain regions experience certain temperatures and help guide our understanding of which locations should and should not be considered for hosting.
+
+As described by the legend on each plot, warmer temperatures are represented by redder colors whereas cooler temperatures are represented in yellow.
+```{r plotTifAvgJul}
+# Plot the .tif data; use heat.colors to maintain color palette consistency with the previous plots
+plot(avgTempJuly, main = "Average Air Temperature during July 1970-2000 (deg C)", col=rev(heat.colors(10)))
+```
+
+If we observe the scale at the right on the "Average Air Temperature during July" map, we can see that our maximum average temperature reaches approximately 30 degrees Celsius; accordingly, any red areas shown represent regions with a measured average July temperature of 30 degrees Celsius, or around 86 degrees Fahrenheit. Notable red areas include the majority of regions around the equator, such as the northern areas of South America, Southeast Asia, southeast regions in North America, and the majority of North and Central Africa. Antarctica is appropriately covered in yellow, signifying sub-zero temperatures.
+
+### Maximum Recorded July Air Temperature
+```{r plotTifMaxJul}
+# Plot the .tif data
+plot(maxTempJuly, main = "Maximum Air Temperature during July 1970-2000 (deg C)", col=rev(heat.colors(10)))
+```
+
+While the "Maximum Air Temperature during July" map appears similar to the average map, the scale for this plot has changed. Now a deep red signifies temperatures of around 40 degrees Celsius, or 104 degrees Fahrenheit. Again, these are the maximum temperatures recorded and averaged over a course of thirty years, so marked regions do not necessarily experience these overwhelming temperatures constantly.
+
+Most of the areas marked red in the previous plot remain red in this one; areas around and at the equator usually experience the hottest temperatures. Careful observation reveals the certain parts of Southeast Asia (around Thailand and Vietnam), as well as Central Africa, remain below 40 degrees. However, places such as northern South America, the Arabian Peninsula, the southwestern United States, India, and even areas in Spain measure at least 30 degrees Celsius.
+
+### Average Recorded February Air Temperature
+```{r plotTifAvgFeb}
+# Plot the .tif data; use heat.colors to maintain color palette consistency with the previous plots
+plot(avgTempFebruary, main = "Average Air Temperature during February 1970-2000 (deg C)", col=rev(heat.colors(10)))
+```
+
+Now we take a look at global average temperatures during the month of February. It is immediately noticible that certain areas have changed colors and cooled off, most notably northern Asia and Russia, the majority of Europe and the continental United States, and the topmost regions of North America. These areas now measure anywhere from -30 to 10 degrees Celsius on average, or -22 to 50 degrees Fahrenheit. Antarctica remains more or less the same temperature, if not slightly warmer considering the temperature gradient scale has shifted.
+
+Also immediately noticible is the dark red hues prevalent throughout areas such as South America, Central and South Africa, India, and Australia. These areas remain above 10 degrees Celsius on average during February; of course, we must remember that areas around the equator experience the least degree of seasonal change compared to the northern and southern hemispheres, and that those in the southern hemisphere enjoy their summer months when the northern hemisphere experiences winter.
+
+### Maximum Recorded February Air Temperature
+```{r plotTifMaxFeb}
+# Plot the .tif data
+plot(maxTempFebruary, main = "Maximum Air Temperature during July 1970-2000 (deg C)", col=rev(heat.colors(10)))
+```
+
+Not a huge amount of change is present between the average and maximum recorded temperatures during February. Certain parts of Africa experience lower maximum temperatures than other parts, a pattern that can be observed in small amounts in other regions as well.
+
+## Average Air Temperature Analysis
+
+We can use data sets highlighting the average monthly air temperatures per year to look at global temperatures on a stricter time basis. Since these recorded temperatures are on a monthly basis per year, these plots should be much more accurate and specific in highlighting areas of interest.
+
+Note that some of the months filtered from the data sets are inconsistent with other years. This is because early Olympic Games had varying degrees of duration; for instance, the 1900 Paris Olympics were held from May 14 to October 28. Months are filtered according to the month in which they started (opening ceremony date).
+
+I have organized the following plots by year, separated into summer and winter sections for ease of comparison between similar seasons. Areas marked in red represent locations where temperatures match the specified query criteria. Points highlighted in blue show the location of the host city of the Olympic Games that year. 
+
+In the case of the summer Olympics, there is a lot more leeway in terms of which locations are feasible to host the games. Maintaining conditions for summer sporting events is relatively easier compared to winter sporting events, so concerns over melting environments or a lack of suitable competing ground is nowhere near as large an issue with the summer games as with the winter games.
+
+I have set the temperature threshold at 32.2 degrees Celsius, or 90 degrees Fahrenheit, as an indicator of hot temperatures for the summer Olympic Games. Ideally, I would have liked to set the temperature threshold at 37 or even 40 degrees Celsius (100 and 104 degrees Fahrenheit respectively) as those are temperatures where human health conditions are more likely to arise from heat exhaustion, heat stroke, or other high temperature related maladies. Historically, however, the summer Olympics have never been hosted in an area with a measured average temperature ranging from 37 to 40 degrees; while those areas have possibly experienced certain days with temperatures measuring within that range, they have yet to experience a monthly temperature average within that range. In fact, many regions around the globe rarely average above 37 degrees Celsius, if at all. Consequently, I lowered the temperature threshold to 32.2 degrees so that the maps for the summer Olympics would even show a reasonable amount of regions within the temperature threshold.
+
+On the other hand, it is much easier to show areas with an average recorded temperature above 0 degrees Celsius. I chose 0 degrees Celsius (32 degrees Fahrenheit) as the temperature threshold for the winter Olympics because that is the melting point for ice and snow, major components for certain winter sports. Of course, certain winter events such as ice skating make use of indoor facilities, which can negate the effects of the air temperature outside. However, other events such as alpine skiing, biathlon, and cross-country skiing can not be done indoors and require solid snow cover; high temperatures (above 0 degrees) would melt said snow cover and could complicate the logistics with running those events. In the present day there are methods of counteracting this, including using artificial snow instead of relying on natural snow, but those methods cost money and time; there is a reason why the Winter Olympic Games have historically never been hosted in the southern hemisphere. As temperatures increase, the International Olympic Committee (IOC) has to decide whether to trust in the logistical infrastructure of cities where environmental conditions are not reliable or support locations with more reliable and consistent weather conditions.
+
+### Games of the II Summer Olympiad, 1900 (Paris, France)
+
+```{r latLon1900}
+# Filter results to show areas where temperatures were measured above 35.0 degrees Celsius
+filter1900 <- filter(year1900, May > 32.2)
+newmap <- getMap(resolution = "low")
+
+# Plot the map
+plot(newmap, asp = 1)
+points(filter1900$lon, filter1900$lat, col="red", cex=0.04)
+
+# Plot the coordinates for the host city
+points(2.35, 48.9, col="blue", cex=0.5)
+```
+
+The Games of the II Summer Olympiad started on May 14, 1900 and ended October 28, 1900.
+
+In 1900, the only areas with a recorded average temperature in the month of May greater than 32.2 degrees are in Africa, the Arabian Peninsula, and India. This is a locational trend that is common with the rest of the following maps for the summer Olympics. The host city, Paris, is located far from these areas and, according to the data set, did not experience any overwhelmingly hot temperatures at the start of the Olympic Games that year.
+
+### Games of the V Summer Olympiad, 1912 (Stockholm, Sweden)
+```{r latLon1912}
+# Filter results to show areas where temperatures were measured above 35.0 degrees Celsius
+filter1912 <- filter(year1912, May > 32.2)
+newmap <- getMap(resolution = "low")
+
+# Plot the map
+plot(newmap, asp = 1)
+points(filter1912$lon, filter1912$lat, col="red", cex=0.04)
+
+# Plot the coordinates for the host city
+points(18.0, 59.3, col="blue", cex=0.5)
+```
+
+The Games of the V Summer Olympiad started on May 5, 1912 and ended July 22, 1912.
+
+Twelve years later, we can see that temperatures have not changed much. Perhaps the red zones observable in Africa have increased in size very slightly, but there are no new locations to report. Stockholm is well clear of these regions.
+
+### Games of the VIII Summer Olympiad, 1924 (Paris, France)
+```{r latLon1924}
+# Filter results to show areas where temperatures were measured above 35.0 degrees Celsius
+filter1924 <- filter(year1924, May > 32.2)
+newmap <- getMap(resolution = "low")
+
+# Plot the map
+plot(newmap, asp = 1)
+points(filter1924$lon, filter1924$lat, col="red", cex=0.04)
+
+# Plot the coordinates for the host city
+points(2.35, 48.9, col="blue", cex=0.5)
+```
+
+The Games of the VIII Summer Olympiad started on May 4, 1924 and ended July 27, 1924.
+
+Again, the temperature zones have changed to a very small degree. The zones in Africa have shifted slightly again while certain parts in India experienced somewhat cooler temperatures during the May of 1924. The red zone in Sudan has decreased in size compared to twelve years ago. Paris is clear as it was twenty four years ago.
+
+### Games of the XI Summer Olympiad, 1936 (Berlin, Germany)
+```{r latLon1936}
+# Filter results to show areas where temperatures were measured above 35.0 degrees Celsius
+filter1936 <- filter(year1936, Aug > 32.2)
+newmap <- getMap(resolution = "low")
+
+# Plot the map
+plot(newmap, asp = 1)
+points(filter1936$lon, filter1936$lat, col="red", cex=0.04)
+
+# Plot the coordinates for the host city
+points(13.4, 52.5, col="blue", cex=0.5)
+```
+
+The Games of the XI Summer Olympiad started on August 1, 1936 and ened August 16, 1936.
+
+There are some noticeable differences in this map compared to the previous. For one, much more the Arabian Peninsula is covered in red, whereas India seems to have completely cooled off. The country of Chad in Africa no longer has a large red zone either. Furthermore, a small region in the southwestern United States has suddenly appeared as well. Although it might seem as if a major temperature shift has occurred within the past twelve years, but that is not the case. The 1936 Olympic Games started in August for the first time in Olympic history, so the month being observed has changed from May to August as well. If anything, this particular map reveals that time is also a crucial deciding factor in determining the future host location of the games, as certain regions grow warmer or cooler depending on the month.
+
+### Games of the XIV Summer Olympiad, 1948 (London, United Kingdom)
+```{r latLon1948}
+# Filter results to show areas where temperatures were measured above 35.0 degrees Celsius
+filter1948 <- filter(year1948, Jul > 32.2)
+newmap <- getMap(resolution = "low")
+
+# Plot the map
+plot(newmap, asp = 1)
+points(filter1948$lon, filter1948$lat, col="red", cex=0.04)
+
+# Plot the coordinates for the host city
+points(0.13, 51.5, col="blue", cex=0.5)
+```
+
+The Games of the XIV Summer Olympiad started on July 29, 1948 and ended August 14, 1948.
+
+This year, the Olympics started in July; the filter month has been changed accordingly. It can be seen that zones in July are representative of a mix of the zones previously observed in May and in August. West India remains marked and several countries in Africa have more noticeable markings as well, compared to in 1936. The small area in the southwest United States remains as well; even a tiny part in northwest China has popped up as well. Nevertheless London remains out of these bounds.
+
+### Games of the XVII Summer Olympiad, 1960 (Rome, Italy)
+```{r latLon1960}
+# Filter results to show areas where temperatures were measured above 35.0 degrees Celsius
+filter1960 <- filter(year1960, Aug > 32.2)
+newmap <- getMap(resolution = "low")
+
+# Plot the map
+plot(newmap, asp = 1)
+points(filter1960$lon, filter1960$lat, col="red", cex=0.04)
+
+# Plot the coordinates for the host city
+points(12.5, 41.9, col="blue", cex=0.5)
+```
+
+The Games of the XVII Summer Olympiad started on August 25, 1960 and ended September 11, 1960.
+
+This is the closest the host city has been to any red zone. The red areas have remained consistent in their location and have not appeared in any new areas (except for one tiny dot in East China, you'll have to look closely).
+
+### Games of the XX Summer Olympiad, 1972 (Munich, Germany)
+```{r latLon1972}
+# Filter results to show areas where temperatures were measured above 35.0 degrees Celsius
+filter1972 <- filter(year1972, Aug > 32.2)
+newmap <- getMap(resolution = "low")
+
+# Plot the map
+plot(newmap, asp = 1)
+points(filter1972$lon, filter1972$lat, col="red", cex=0.04)
+
+# Plot the coordinates for the host city
+points(11.6, 48.1, col="blue", cex=0.5)
+```
+
+The Games of the XX Summer Olympiad started on August 26, 1972 and ended September 11, 1972.
+
+Again, no large changes between this map and the previous map. The area in North America has slightly diminished in size and moved out just north of the United States-Mexico border. The Araibian Peninsula remains largely covered in red.
+
+### Games of the XXIII Summer Olympiad, 1984 (Los Angeles, California, United States)
+```{r latLon1984}
+# Filter results to show areas where temperatures were measured above 35.0 degrees Celsius
+filter1984 <- filter(year1984, Jul > 32.2)
+newmap <- getMap(resolution = "low")
+
+# Plot the map
+plot(newmap, asp = 1)
+points(filter1984$lon, filter1984$lat, col="red", cex=0.04)
+
+# Plot the coordinates for the host city
+points(-118.2, 34.1, col="blue", cex=0.5)
+```
+
+The Games of the XXIII Summer Olympiad started on July 28, 1984 and ended August 12, 1984.
+
+We finally have a host city within (mostly) the red zones. Los Angeles can be seen within the southeastern region colored in red. We can surmise that the 1984 Olympics experienced temperatures of at least 32.2 dgrees regularly throughout its duration. In other areas, some new countries in Asia and the Middle East have been marked red, such as Turkmenistan.
+
+### Games of the XXVI Summer Olympiad, 1996 (Atlanta, Georgia, United States)
+```{r latLon1996}
+# Filter results to show areas where temperatures were measured above 35.0 degrees Celsius
+filter1996 <- filter(year1996, Jul > 32.2)
+newmap <- getMap(resolution = "low")
+
+# Plot the map
+plot(newmap, asp = 1)
+points(filter1996$lon, filter1996$lat, col="red", cex=0.04)
+
+# Plot the coordinates for the host city
+points(-84.4, 33.9, col="blue", cex=0.5)
+```
+
+The Games of the XXVI Summer Olympiad started on July 19, 1996 and ended August 4, 1996.
+
+1996 shows no vast changes to the map. The southwest United States red region has grown slightly more solid in appearance, and parts of northwest India seems to be marked as well. Otherwise, nothing major has occurred.
+
+### Games of the XXVII Summer Olympiad, 2000 (Sydney, Australia)
+```{r latLon2000}
+# Filter results to show areas where temperatures were measured above 35.0 degrees Celsius
+filter2000 <- filter(year2000, Sep > 32.2)
+newmap <- getMap(resolution = "low")
+
+# Plot the map
+plot(newmap, asp = 1)
+points(filter2000$lon, filter2000$lat, col="red", cex=0.04)
+
+# Plot the coordinates for the host city
+points(151.2, -33.7, col="blue", cex=0.5)
+```
+
+The Games of the XXVII Summer Olympiad started on September 15, 2000 and ended October 1, 2000.
+
+This map shows as dramatic shift in events, but only because the starting month is September instead of May, July, or August as was the case previously. As a result, as winter approaches in the northern hemisphere, some regions that were previously marked have become unmarked again, such as the southwestern United States region and some areas in western Asia and India. Sydney, Australia remains unaffected by any consistently high temperatures.
+
+### Games of the XXVIII Summer Olympiad, 2004 (Athens, Greece)
+```{r latLon2004}
+# Filter results to show areas where temperatures were measured above 35.0 degrees Celsius
+filter2004 <- filter(year2004, Aug > 32.2)
+newmap <- getMap(resolution = "low")
+
+# Plot the map
+plot(newmap, asp = 1)
+points(filter2004$lon, filter2004$lat, col="red", cex=0.04)
+
+# Plot the coordinates for the host city
+points(23.7, 37.9, col="blue", cex=0.5)
+```
+
+The Games of the XXVIII Summer Olympiad started on August 13, 2004 and ended August 29, 2004.
+
+2004 shows a return to form as the starting month returns to August. The map is representative of this as it imitates previous maps we have seen with August as the filter month.
+
+### Games of the XXIX Summer Olympiad, 2008 (Beijing, China)
+```{r latLon2008}
+# Filter results to show areas where temperatures were measured above 35.0 degrees Celsius
+filter2008 <- filter(year2008, Aug > 32.2)
+newmap <- getMap(resolution = "low")
+
+# Plot the map
+plot(newmap, asp = 1)
+points(filter2008$lon, filter2008$lat, col="red", cex=0.04)
+
+# Plot the coordinates for the host city
+points(116.4, 39.9, col="blue", cex=0.5)
+```
+
+The Games of the XXIX Summer Olympiad started on August 8, 2008 and ended August 24, 2008.
+
+2008 shows no remarkable change either. Just a few growing and shrinking regions within the confines of the Middle East and the African continent.
+
+### Games of the XXX Summer Olympiad, 2012 (London, United Kingdom)
+```{r latLon2012}
+# Filter results to show areas where temperatures were measured above 35.0 degrees Celsius
+filter2012 <- filter(year2012, Jul > 32.2)
+newmap <- getMap(resolution = "low")
+
+# Plot the map
+plot(newmap, asp = 1)
+points(filter2012$lon, filter2012$lat, col="red", cex=0.04)
+
+# Plot the coordinates for the host city
+points(0.13, 51.5, col="blue", cex=0.5)
+```
+
+The Games of the XXX Summer Olympiad started on July 27, 2012 and ended August 12, 2012.
+
+There are a few small details in this map of 2012 that should be noted. First, while the marked regions in Africa have not shifted in central location, they have become denser with fewer white spots interspersed throughout them. Additionally, there are a couple more points observable in China as well. Small as they are, their appearance is not something that should be disregarded.
+
+### Games of the XXXI Summer Olympiad, 2016 (Rio de Janeiro, Brazil)
+```{r latLon2016}
+# Filter results to show areas where temperatures were measured above 35.0 degrees Celsius
+filter2016 <- filter(year2016, Aug > 32.2)
+newmap <- getMap(resolution = "low")
+
+# Plot the map
+plot(newmap, asp = 1)
+points(filter2016$lon, filter2016$lat, col="red", cex=0.04)
+
+# Plot the coordinates for the host city
+points(-43.17, -22.9, col="blue", cex=0.5)
+```
+
+The Games of the XXXI Summer Olympiad started on August 5, 2016 and ended August 21, 2016.
+
+2016 shows much of the same detail as 2012. The regions in Africa and the Middle East remain largely the same, as does the region in the United States and Mexico. The dots previously present in China remain consistent in their location, if not having spread just a tiny bit.
+
+This concludes the summer portion of global temperature visualization. To summarize, most of the red marked points on the map throughout the last century have mostly remained in Africa, the Middle East, and small parts of North America and China. While this information may not be of the best usefulness in determining Summer Olympic Games locations as it leaves a lot of options available, there are observable instances of growth in certain regions that can not be ignored either.
+
+### Games of the I Winter Olympiad, 1924 (Chamonix, France)
+```{r latLon1924W}
+# Filter results to show areas where temperatures were measured above 10.0 degrees Celsius
+filter1924W <- filter(year1924, Jan > 0.0)
+newmap <- getMap(resolution = "low")
+
+# Plot the map
+plot(newmap, asp = 1)
+points(filter1924W$lon, filter1924W$lat, col="red", cex=0.04)
+
+# Plot the coordinates for the host city
+points(6.9, 45.9, col="blue", cex=0.5)
+```
+
+The Games of the I Winter Olympiad started on January 25, 1924 and ended February 5, 1924.
+
+The map plots for the winter months are much more interesting compared to the summer maps. With the threshold being 0 degrees, we can see many more regions where the average recorded temperature was above that threshold.
+
+In 1924, we can see that the entirety of South America, Africa, and Australia are marked red, indicating that the entirety of those continents experienced an average temperature greater than 0 degrees in the month of January. This makes sense because, as mentioned before, the southern hemisphere experiences summer while the northern hemisphere has winter.
+
+Other fully marked or semi-marked areas include, but are not limited to, India, Mexico, Great Britain, the Arabian Peninsula, southern China, southern Japan, southern and western United States, the western coast of Canada, Spain, France, Italy, and numerous other European countries. The first Winter Olympic Games were hosted in Chamonix, France, which can be seen highlighted in blue and just on the border of the red zone running from Belgium down to Italy.
+
+### Games of the IV Winter Olympiad, 1936 (Garmisch-Partenkirchen, Germany)
+```{r latLon1936W}
+# Filter results to show areas where temperatures were measured above 10.0 degrees Celsius
+filter1936W <- filter(year1936, Feb > 0.0)
+newmap <- getMap(resolution = "low")
+
+# Plot the map
+plot(newmap, asp = 1)
+points(filter1936W$lon, filter1936W$lat, col="red", cex=0.04)
+
+# Plot the coordinates for the host city
+points(11.1, 47.5, col="blue", cex=0.5)
+```
+
+The Games of the IV Winter Olympiad started on February 6, 1936 and ended February 16, 1936.
+
+In 1936, with the starting date occurring in February instead of January, we can see a marked increase in the extent of red points. Now the entirety of western Europe is completely covered, and more of the United States has become marked as well. The host city of Garmisch-Partenkirchen is located within the red area as well, signifying that the Olympics hosted there at this time period most likely witnessed temperatures above freezing. 
+
+### Games of the V Winter Olympiad, 1948 (St. Moritz, Switzerland)
+```{r latLon1948W}
+# Filter results to show areas where temperatures were measured above 10.0 degrees Celsius
+filter1948W <- filter(year1948, Jan > 0.0)
+newmap <- getMap(resolution = "low")
+
+# Plot the map
+plot(newmap, asp = 1)
+points(filter1948W$lon, filter1948W$lat, col="red", cex=0.04)
+
+# Plot the coordinates for the host city
+points(9.8, 46.5, col="blue", cex=0.5)
+```
+
+The Games of the V Winter Olympiad started on January 30, 1948 and ended February 8, 1948.
+
+St. Mortiz, Switzerland is located deep in the heart of the red zone in 1948. We can see that some more European countries such as Poland have become marked as well; more areas in southern Japan have become marked as well.
+
+### Games of the VIII Winter Olympiad, 1960 (Squaw Valley, California, United States)
+```{r latLon1960W}
+# Filter results to show areas where temperatures were measured above 10.0 degrees Celsius
+filter1960W <- filter(year1960, Feb > 0.0)
+newmap <- getMap(resolution = "low")
+
+# Plot the map
+plot(newmap, asp = 1)
+points(filter1960W$lon, filter1960W$lat, col="red", cex=0.04)
+
+# Plot the coordinates for the host city
+points(-120.2, 39.2, col="blue", cex=0.5)
+```
+
+The Games of the VIII Winter Olympiad started on February 18, 1960 and ended February 28, 1960.
+
+1960 sees some cooing in certain areas and some warming in others. Poland has seemingly cooled down while a streak in northwestern China has appeared. Almost the entirety of the Japanese mainland has become red as well. This year's host city, Squaw Valley, can be seen right on the edge of the western United States red zone.
+
+### Games of the XI Winter Olympiad, 1972 (Sapporo, Japan)
+```{r latLon1972W}
+# Filter results to show areas where temperatures were measured above 10.0 degrees Celsius
+filter1972W <- filter(year1972, Feb > 0.0)
+newmap <- getMap(resolution = "low")
+
+# Plot the map
+plot(newmap, asp = 1)
+points(filter1972W$lon, filter1972W$lat, col="red", cex=0.04)
+
+# Plot the coordinates for the host city
+points(141.4, 43.1, col="blue", cex=0.5)
+```
+
+The Games of the XI Winter Olympiad started on February 3, 1972 and ended February 13, 1972.
+
+Areas such as Turkey and parts of China have cooled down in 1972 compared to 1960, whereas areas in the United States, primarily in the west, have become marked as well. Sapporo, this year's Olympic Games host, can be seen on Hokkaido, the northern island of Japan and known for having the coldest regions in the country.
+
+### Games of the XIV Winter Olympiad, 1984 (Sarajevo, Yugoslavia)
+```{r latLon1984W}
+# Filter results to show areas where temperatures were measured above 10.0 degrees Celsius
+filter1984W <- filter(year1984, Feb > 0.0)
+newmap <- getMap(resolution = "low")
+
+# Plot the map
+plot(newmap, asp = 1)
+points(filter1984W$lon, filter1984W$lat, col="red", cex=0.04)
+
+# Plot the coordinates for the host city
+points(18.4, 43.9, col="blue", cex=0.5)
+```
+
+The Games of the XIV Winter Olympiad started on February 7, 1984 and ended February 19, 1984.
+
+More areas in northwestern and northern United States have grown warmer on average, forming a sort of "ring" around a region of unmarked territory. Other areas have experienced small changes, if at all.
+
+### Games of the XVII Winter Olympiad, 1994 (Lillehammer, Norway)
+```{r latLon1994W}
+# Filter results to show areas where temperatures were measured above 10.0 degrees Celsius
+filter1994W <- filter(year1994, Feb > 0.0)
+newmap <- getMap(resolution = "low")
+
+# Plot the map
+plot(newmap, asp = 1)
+points(filter1994W$lon, filter1994W$lat, col="red", cex=0.04)
+
+# Plot the coordinates for the host city
+points(10.5, 61.1, col="blue", cex=0.5)
+```
+
+The Games of the XVII Winter Olympiad started on February 12, 1994 and ended February 27, 1994.
+
+The "ring" present in the previous map has disappeared now. Lillehammer, Norway is far north and in the unmarked white region above the marked continental Europe.
+
+### Games of the XIX Winter Olympiad, 2002 (Salt Lake City, Utah, United States)
+```{r latLon2002W}
+# Filter results to show areas where temperatures were measured above 10.0 degrees Celsius
+filter2002W <- filter(year2002, Feb > 0.0)
+newmap <- getMap(resolution = "low")
+
+# Plot the map
+plot(newmap, asp = 1)
+points(filter2002W$lon, filter2002W$lat, col="red", cex=0.04)
+
+# Plot the coordinates for the host city
+points(-111.9, 40.8, col="blue", cex=0.5)
+```
+
+The Games of the XIX Winter Olympiad started on February 8, 2002 and ended February 24, 2002.
+
+Salt Lake City can be seen just barely out of reach of the surrouning red points. Parts of northwestern China have starte warming again, and even parts of Sweden have been marked.
+
+### Games of the XX Winter Olympiad, 2006 (Turin, Italy)
+```{r latLon2006W}
+# Filter results to show areas where temperatures were measured above 10.0 degrees Celsius
+filter2006W <- filter(year2006, Feb > 0.0)
+newmap <- getMap(resolution = "low")
+
+# Plot the map
+plot(newmap, asp = 1)
+points(filter2006W$lon, filter2006W$lat, col="red", cex=0.04)
+
+# Plot the coordinates for the host city
+points(7.7, 45.0, col="blue", cex=0.5)
+```
+
+The Games of the XX Winter Olympiad started on February 10, 2006 and ended February 26, 2006.
+
+The marks in northwestern China have become more fixed now, suggesting some temperature increases in that region. Parts of southern and eastern Germany have seemingly cooled as well. Iceland has some red on the fringes of its borders as well.
+
+### Games of the XXI Winter Olympiad, 2010 (Vancouver, Canada)
+```{r latLon2010W}
+# Filter results to show areas where temperatures were measured above 10.0 degrees Celsius
+filter2010W <- filter(year2010, Feb > 0.0)
+newmap <- getMap(resolution = "low")
+
+# Plot the map
+plot(newmap, asp = 1)
+points(filter2010W$lon, filter2010W$lat, col="red", cex=0.04)
+
+# Plot the coordinates for the host city
+points(-123.1, 49.3, col="blue", cex=0.5)
+```
+
+The Games of the XXI Winter Olympiad started on February 12, 2010 and ended February 28, 2010.
+
+Some parts of eastern Europe have lost their red marking in 2010. The streaks present in northwestern China, while still present, have shrunken in size. Even a tiny part of northern Great Britain has become white. Vancouver, the host city, can be seen intermixed within the red and white marked region on the western coast of Canada.
+
+### Games of the XXII Winter Olympiad, 2014 (Sochi, Russia)
+```{r latLon2014W}
+# Filter results to show areas where temperatures were measured above 10.0 degrees Celsius
+filter2014W <- filter(year2014, Feb > 0.0)
+newmap <- getMap(resolution = "low")
+
+# Plot the map
+plot(newmap, asp = 1)
+points(filter2014W$lon, filter2014W$lat, col="red", cex=0.04)
+
+# Plot the coordinates for the host city
+points(39.7, 43.6, col="blue", cex=0.5)
+```
+
+The Games of the XXII Winter Olympiad started on February 7, 2014 and ended February 23, 2014.
+
+Eastern Europe has warmed again as Germany, Poland, parts of Sweden, and even the northern border of Norway are marked by red. Sochi can be seen on the very edge of the red points on the southern border of Russia.
+
+This concludes the winter portion of global temperature visualization. 
+
+
+## Financial Costs (1960-2016)
+
+This section analyzes the financial costs of the Olympic Games from the years 1960 to 2016. 
+
+### Financial Scatterplots
+
+These plots explore whether the number of events or the number of atheletes influence the total cost of hosting the Olympics.
+
+```{r scatterPlotAthelete}
+# Plot the scatter plot and label
+atheletePlot <- ggplot(countryCost, aes(x=Atheletes, y=Cost)) + geom_point() + ggtitle("Number of Atheletes vs Cost of Hosting") + xlab("Number of Atheletes") + ylab("Cost (in billions of USD)") +   geom_smooth(method='lm', formula=y~x)
+
+# Make the plot interactive so that the reader can hover over individual data points
+ggplotly(atheletePlot, tooltip="Atheletes")
+
+# Do a statistical summary to check correlation coefficients, p-value, etc. of regression
+fit <- lm(formula=Cost~Atheletes, data=countryCost)
+summary(fit)
+```
+
+```{r scatterPlotEvent}
+# Plot the scatter plot and label
+eventPlot <- ggplot(countryCost, aes(x=Events, y=Cost)) + geom_point() + ggtitle("Number of Events vs Cost of Hosting") + xlab("Number of Events") + ylab("Cost (in billions of USD)") + geom_smooth(method='lm', formula=y~x)
+
+# Make the plot interactive so that the reader can hover over individual data points
+ggplotly(eventPlot, tooltip="Events")
+
+# Do a statistical summary to check correlation coefficients, p-value, etc. of regression
+fit <- lm(formula=Cost~Events, data=countryCost)
+summary(fit)
+```
+
+While both scatter plots and their respective regression lines show a general increasing trend, suggesting that the cost of hosting the Olympic Games increases when the number of atheles or the number of events increases, the summary statistics for the regression model state otherwise. The resulting r-squared values for each plot (0.0786 for the athlete scatter plot and 0.09125 for the event scatter plot) indicate that the regression models fitted to each plot are useless and do not explain the variation within the data well. The closer the r-squared value is to 100%, the better the model explains the response variable around the mean. Since these scatter plots amount to 7.8% and 9.1% r-squared values, we can conclude that the fitted regression model does not accurately represent any meaningful relationship between number of atheletes or number of events and the cost of hosting the Olympics. I believe this can be attributed to the number of outliers in the data which can sway the regression model.
+
+### Summer Olympics Cost Map
+
+The cost here is measured in billions of U.S. dollars, so a value of 5 on the map plots translates to 5 billion USD spent. 
+
+From 1960 to 2016, most countries spent less than 10 billion U.S. dollars on hosting the summer Olympic Games. The 1984 Summer Olympics in Los Angeles, for example, spent less than a billion U.S. dollars on hosting the Olympics and is often seen as the best example of efficient cost management and effective privatization and sponsorship use. the 1996 Summer Olympics in Atlanta was more expensive, totaling 4.14 billion dollars, bringing the United States' total spendings on hosting the summer Olympic Games between 1960 to 2016 to just under 5 billion dollars. On the other hand, the United Kingdom, which hosted just one summer Olympic Games between 1960 and 2016 (2012 Summer Olympics in London) spent nearly 15 billion dollars in preparation, which is why the U.K. is featured prominently in red below under the 10 to 15 billion dollar range.
+
+```{r tMapSummer}
+# Make the tmap interactive so users can better see the countries
+tmap_mode("view")
+tm_shape(countryCostSummer) + tm_polygons("Cost") + tm_layout("Global Map of Country Spendings on Hosting the Summer Olympics (1960-2016) in Billions of Dollars")
+
+# Give a small view of the data table
+head(countryCostSummer)
+```
+
+### Winter Olympics Cost Map
+
+Much like the previous plot, this graph highlights the spendings of each country that hosted the Winter Olmypic Games between 1960 to 2016. On average, as shown by this chart, countries spent less on hosting the Winter Olympic games than with the one exception of Russia. According to this particular data set, the Russian Federation blew nearly 22 billion dollars on hosting the 2014 Winter Olympics in Sochi, which is why Russia is drenched in dark red.
+```{r tMapWinter}
+tm_shape(countryCostWinter) + tm_polygons("Cost") + tm_layout("Global Map of Country Spendings on Hosting the Winter Olympics (1960-2016) in Billions of Dollars")
+
+# Make the data table available to inspect as well
+head(countryCostWinter)
+```
+
+
+# Results and Discussion
+
+## Temperature Anomaly Plots
+
+Both anomaly plots suggest that temperatures are warming up, at least in comparison to the 20th century average with respect to each month. Over the past century, it is clear that the temperature has grown anywhere from 1 to 2 degrees Celsius warmer during the summer season to at least 2 degrees warmer during the winter season. Extrapolation would further suggest continued increasing temperatures for the foreseeable future.
+
+This is a considerable effect that can influence preparation for hosting the Winter Olympics, which on a whole grow further dependent on colder climates. Increased temperatures already affects natural snowfall and the rate at which snow melts after ground accumulation, and may force future venues to overly rely on artificial snow (which can be expensive and time-consuming) to create the necessary environments necessary for many winter sporting events.
+
+## Air Temperature Analyses
+
+In the summer average air temperature maps, none of the host cities were located within the red marked points and regions. While it is hard to conclude much thanks to the nature of the data set and the temperature thresholds I could not achieve, it can be noted that there are a few specific areas around the globe that should be avoided, or at the very least very lightly considered, for Olympic Games hosting. Depending on the month (May, June, July, August), areas prominently in North and parts of Central Africa, regions within the Middle East, and sections of the Arabian Peninsula may not be suitable for hosting summer Olympics.
+
+In the winter average air temperature maps, there are several occasions in which the host city of that year's Olympics was located within the red marked points. That does not mean that they are in an unsuitable location. While the red points indicate that these locations might experience melting snow and above zero temperatures (above the temperature threshold), they do not mean that any existing snow melted immediately or that certain elevations experienced the same above zero temperatures either. These maps give a general overview of the AVERAGE temperature recorded and should not be considered the sole source by which to draw conclusions from.
+
+That being said, there is a consistent pattern of host city locations for the winter Olympics, that being no city in the southern hemisphere has yet to host the Winter Olympic Games. The South American, African, and Australian continents are simply too warm to sustain feasible winter sporting events without heavy use of artificial snow and other unnatural means of preserving a usable winter environment. Other areas such as Mexico, Southeast Asia, the Middle East, the Arabian Peninsula, and parts of the southern United States also do not seem feasible. Cities that have historically been located in red zones have at the very least been in areas that vary between passing and maintaining the temperature threshold; in that case, some future climate predictions (or heavy convincing by the host city, as will be explained in the bidding process section below) can be used to determine whether winter events could be held there, instead of immediate disregard.
+
+At least in the case of the Winter Olympic Games, focus should be placed on supporting bids from cities located in cooler climate zones with either a history of variable temperature threshold passing or no history of passing the temperature threshold at all.
+
+## Financial Analysis
+
+From the getgo it should be said that the number of athletes and the number of events at any Olympic Games does not have a strong linear relationship with the total cost of hosting them. There are multiple cases, visualized as outliers and data points above and below the fitted regression line, where games with high numbers of atheletes and events end up costing less than other games with comparatively less numbers of atheletes and events. For instance, the 1984 Summer Olympic Games in Los Angeles had 221 events and 6829 recorded atheletes participating; those games cost the city approximately 720 million U.S. dollars to organize and host. In comparison, the 1976 Summer Olympic Games in Montreal, Canada, with a slight decrease in both number of events and atheletes (198 an 6048 respectively) cost 6 billion U.S. dollars to host. There are multiple other factors in considering the cost of hosting the Olympic Games, as explained by the bidding process involved for hosting the Olympics.
+
+## The Current Bidding Process for Olympic Games Hosting
+
+As of 1999, the Olympic bidding process involves two phases, briefly summarized below.
+
+First, a city wishing to host a future Olympic Games submits an application to the International Olympic Committee (IOC) through that city's National OlympicComittee (NOC). Following submission of the application, applicant cities must answer a questionnaire involving the elements required for a successful Olympic Games organization. By doing so, cities can demonstrate their capability and strengths in being the ideal city to host the next Olympics in. Conversely, the IOC evaluates each city's strengths and weaknesses, including logistical and financial capabilities. The IOC Executive Board then selects several cities they believe are qualified and start the second phase.
+
+The second phase involves another questionnaire process for the qualifiers. A more extensive interview demanding increased detailing and planned organization is required. IOC members located within the country of a bidding city tour and travel the city to visit planned facilities and venues and to review the city's proposal for the theme of the future games. Reports are sent to IOC members prior to the voting stage. Voting occurs in a neutral country who has no cities participating in the bid; IOC members from countries that do have a city bidding can not vote. Each viable IOC member is given one vote to choose a city of their favor; the city with the most votes is nominated as the next host for the Olympic Games, and a hosting contract is subsequently signed. 
+
+Bidding can occur up to a decade in advance of the planned Olympic Games concerning the bid; the 2020 (now 2021) Summer Olympic Games bid was granted to Tokyo in 2011. Some of the categories in which cities are scored in for hosting viability include the city's vision of the Games, competition venues and facilities, Olympic village locations, media centers, sports experience, environment, transport, medical services, telecommunications, energy, safety, legal customs, finance and marketing, and meteorology, which pertains to this study.
+
+
+# Future Work, Limitations, and Challenges
+
+Due to time and resource constraints, I was not able to complete a few analyses originially intended to be included in this study. These analyses include elevation analysis, reliable and relevant future climate predictions, and specific city studies for dual-host feasibility. With more time, I would have been able to plot elevation data and connect and compare the results with the temperature maps; I could also have been able to focus on certain city characteristics and distance to determine whether co-hosting between certain cities would be possible. New question guidelines could further expand the extent of this study: what city characteristics are necessary for co-hosting the Olympic Games? Have cities considered co-hosting previously? To what degree do cities need to be similar or close enough to each other to be considered appropriate hosts?
+
+However, some analyses I wished to complete are not possible without finding more appropriate data sets. I was not able to find appropriate data for reliable climate predictions in a usable format and with potential for spatial joining. Consequently, I was not able to include that analysis in this study, even considering its importance to the nature of this report. Also, initial data sets that I found for an individual country by country basis turned out to be inappropriate thanks to the time frame and unit of measure. Perhaps with more time I could find a more appropriate data set, but I deemed the one I found to be unusable for this project.
