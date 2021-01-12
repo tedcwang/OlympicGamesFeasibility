@@ -26,3 +26,8 @@ https://query.data.world/s/c64ruj3biyf5wpefrp7e724fd7o35e
 
 This country shapefile provides the necessary geospatial data, projected as a WGS84 reference system, needed to add location to the financial data above:
 https://opendata.arcgis.com/datasets/a21fdb46d23e4ef896f31475217cbb08_1.zip
+
+### Downloading and viewing the .rmd file
+Click on the .rmd link to view the file in GitHub UI. There you should be able to see a button "Raw". Right click "Raw" and choose "Save Link As", then save where ever you wish on your device. You should be able to view the file now.
+
+Alternatively, if you already have R and RStudio installed, you can simply open the .rmd file there.
